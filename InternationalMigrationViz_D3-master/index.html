@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<head>
+<link rel="stylesheet" type="text/css" href="design.css">
+<style>
+/* The Modal (background) */
+.modal {
+    display: none; /* Hidden by default */
+    position: fixed; /* Stay in place */
+    z-index: 1; /* Sit on top */
+    padding-top: 10px; /* Location of the box */
+    left: 0;
+    top: 0;
+    width: 100%; /* Full width */
+    height: 100%; /* Full height */
+    overflow: auto; /* Enable scroll if needed */
+    background-color: rgb(0,0,0); /* Fallback color */
+    background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+}
+
+/* Modal Content */
+.modal-content {
+    background-color: #fefefe;
+    margin: auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 80%;
+}
+
+/* The Close Button */
+.close {
+    color: #aaaaaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+}
+
+.close:hover,
+.close:focus {
+    color: #000;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.axis path,
+.axis line {
+    fill: none;
+    stroke: grey;
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+}
+
+.labelFontPopupTitle{
+    font-family:"Verdana";
+    font-size: 12px;
+}
+
+.labelFontPopupText{
+    font-family:"Verdana";
+    font-size: 12px;
+}
+
+
+</style>
+    
+</head>
+  <script src="http://d3js.org/d3.v3.min.js"></script>
+  <script src="http://d3js.org/topojson.v1.min.js"></script>
+  <script src="./js/datamaps.world.min.js?v=1"></script>
+  <script src="https://d3js.org/queue.v1.min.js"></script>
+<body>
+    
+  <!-- A popup -->
+  <div id="myModal" class="modal">
+  <!-- Modal content -->
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <label id="popupTitle" class="labelFontPopupTitle">Show info about country/factor here</label>
+    <div id="popupChart" class="labelFontPopupText">
+        <!--The chart for each country is shown here -->
+    </div>
+  </div>
+  </div>
+
+<script>
+// Get the popup
+var modal = document.getElementById('myModal');
+
+// Get the <span> element that closes the modal
+var span = document.getElementsByClassName("close")[0];
+
+// Click on <span> (x), close popup
+span.onclick = function() {
+    modal.style.display = "none";
+}
+
+//click anywhere outside of popup, closes it
+window.onclick = function(event) {
+    if (event.target == modal) {
+        modal.style.display = "none";
+    }
+}
+</script>
+    
+  <h2>International Migration and World Bank Indicators</h2>
+    <label id="testValue" class="labelFont">For year:</label>
+    <br>
+    <br>
+  <div id="sliderandbuttons" style="width:100%; margin-left:20px; padding-bottom:0px; background-color:red;">
+    <div style="float: left;">
+        <!--<button class="myButton" onclick="clearArcs()">Clear</button>-->
+        <input id="testslider" type="range" min="1990" max="2015" value="1990" step="5" />   
+        <span id="range" class="labelFont">1990</span>
+    </div>
+    
+    <!--<div style="float:right; margin-right:20%;">
+        <button id="btnFactor1" class="myButton" onclick="loadFactorToMap('NetRefugees')">Net Refugees per capita</button>
+        <button id="btnFactor2" class="myButton" onclick="loadFactorToMap('GDP')">GDP per capita</button>
+        <button id="btnFactor3" class="myButton" onclick="loadFactorToMap('Life')">Life Expectancy</button>
+    </div>    -->
+  </div>
+    <h1 style="color:white; margin-top:0px; margin-bottom:0px;">TEST</h1>
+    <table style="margin-left:250px">
+    </table>
+  <script type="text/javascript">
+    onload = function() {
+        var $ = function(id) { return document.getElementById(id); };
+        $('testslider').oninput = function() { $('range').innerHTML = this.value; };
+        $('testslider').oninput();
+    };
+      
+    </script>
+    
+  <div id="wraparoundDiv" style="width:100%;">
+      
+      <div id="upperContainer1" style="position: left; width: 49%; max-height: 30px; float: left; border-style:solid; border-width: thin; border-color:darkgray; background-color: lightgray;">
+      <div style="margin-left: 5%;">
+        <button class="myButton" style="margin-right: 5px;">Migration Data</button> 
+        <button class="myButton" onclick="clearArcs()">Clear Arcs</button> 
+      </div>
+      </div>
+      <div id="upperContainer2" style="position: right; width: 49%; max-height: 30px; float: left; border-style:solid; border-width: thin; border-color:darkgray; margin-left: 5px; background-color: lightgray;">
+          <div style="margin-left: 5%;">
+          
+       <button id="btnFactor1" class="myButton" onclick="loadFactorToMap('NetRefugees')">Net Refugees per capita</button>
+        <button id="btnFactor2" class="myButton" onclick="loadFactorToMap('GDP')">GDP per capita</button>
+        <button id="btnFactor3" class="myButton" onclick="loadFactorToMap('Life')">Life Expectancy</button>
+      </div>
+      </div>
+      
+      <div id="container1" style="position: left; width: 49%; max-height: 450px; float: left; border-style:solid; border-width: thin; border-color:darkgray;"></div>
+      <div id="container2" style="position: right; width: 49%; max-height: 450px; float: left; border-style:solid; border-width: thin; border-color:darkgray; margin-left: 5px; "></div>
+  </div>
+          
+  <script>
+      
+        // Initialize datasets and global vars 
+        var years = ['1990', '1995', '2000', '2005', '2010', '2015']; 
+        var year = 1990;
+        var current_country = ""; // so that we can redraw arcs for current country when changing year. Must be empty string to start with.
+        var current_factor = 'NetRefugees';  
+        var datasets = {};
+        datasets['GDP'] = {}; years.forEach(function(y) { datasets['GDP'][y] = {}; });
+        datasets['Life'] = {}; years.forEach(function(y) { datasets['Life'][y] = {}; });
+        var total_migrants = {}; years.forEach(function(y) { total_migrants[y] = {}; });
+        var im_fraction = {}; years.forEach(function(y) { im_fraction[y] = {}; });
+      
+        var gdp_fills   =   {}; years.forEach(function(y) { gdp_fills[y]   = {}; });
+        var refugee_fills = {}; years.forEach(function(y) { refugee_fills[y] = {}; });
+        var life_fills = {}; years.forEach(function(y) { life_fills[y] = {}; });
+        var stock_fills =   {}; years.forEach(function(y) { stock_fills[y] = {}; });
+        var im_arcs;
+        var em_arcs;
+        
+        var popupHeader = document.getElementById('popupTitle');
+
+        // Config colorscales
+        var gdpScale =  d3.scale.linear().domain([0.1, 1.0, 1000, 1000.1, 10000, 110000.0])
+            .range(['#D3D3D3', '#a30e15', '#f5bac6', '#D3D3D3','#5c8a03', '#264301']); // Greens
+
+        var refugeeScale =  d3.scale.linear().domain([-0.51, -0.25, -0.01, 0.0, 0.01, 0.25, 0.51])
+            .range(['#a30e15', '#a30e15', '#f5bac6', '#D3D3D3', '#5c8a03', '#264301', '#264301']); 
+
+        var lifeScale =  d3.scale.linear().domain([30.0, 59.99, 60.0, 60.01, 80.0, 100.0])
+            .range(['#a30e15', '#f5bac6', '#D3D3D3', '#5c8a03', '#345c01', '#264301']);
+
+        var stockScale =  d3.scale.linear().domain([0.0, 0.2, 0.9])
+            .range(['#D3D3D3', '#5a91a6', '#7cadbe']); // Blues
+
+        var fillsDict = {};
+
+        // Load the data
+        var dataRoot = "./processed_data/"
+        queue()
+            .defer(d3.csv, dataRoot + "GDP_per_capita.csv")
+            .defer(d3.csv, dataRoot + "Total_stock_as_fraction.csv")
+            .defer(d3.csv, dataRoot + "LifeExpectancy.csv")
+            .defer(d3.csv, dataRoot + "NetRefugees_per_cap.csv")
+            .defer(d3.csv, dataRoot + "RawTotalMigrants.csv")
+            .defer(d3.csv, dataRoot + "NetTotalRatio.csv")
+            .defer(d3.json, dataRoot + "immigrant_arcs.json")
+            .defer(d3.json, dataRoot + "emigrant_arcs.json")
+            .await(loadAllData);
+
+        function loadAllData(error, gdp, stock, life, refugees, rawtotal, imfrac, im, em) {
+            years.forEach( function(y) 
+            {
+                gdp.forEach( function(d) { gdp_fills[y][d.id] = gdpScale(d[y]);
+                                           datasets['GDP'][y][d.id] = d[y];
+                });
+                life.forEach( function(d) { life_fills[y][d.id] = lifeScale(d[y]) 
+                                            datasets['Life'][y][d.id] = d[y];
+                });
+                stock.forEach( function(d) { stock_fills[y][d.id] = stockScale(d[y]) });
+                refugees.forEach( function(d) { refugee_fills[y][d.id] = refugeeScale(d[y]) });
+                rawtotal.forEach( function(d) { total_migrants[y][d.id] = d[y]})
+                imfrac.forEach( function(d) { im_fraction[y][d.id] = d[y]})
+            });
+            im_arcs = im; 
+            em_arcs = em;
+            fillsDict['NetRefugees'] = refugee_fills;
+            fillsDict['GDP'] = gdp_fills;
+            fillsDict['Life'] = life_fills;
+            // trigger initialize after first load, to load the color maps
+            updateFillColors('NetRefugees');
+        };
+
+        // Maps config
+        var stockMap = new Datamap({
+            scope: 'world',
+            element: document.getElementById('container1'),
+            projection: 'mercator',
+            height: 500,
+            fills: {
+              defaultFill: '#D3D3D3',
+              //lt50: 'rgba(0,244,244,0.9)',
+              //gt50: 'blue'
+            },
+            geographyConfig: {
+             popupTemplate: function(geo, data) {
+                    //to control where the popup text for each country is shown
+                    return "<div class='hoverinfo' style='margin-left: 10px; margin-top:90px;'><strong>" + geo.properties.name + "</strong></div>";
+             },
+                //popupTemplate: 
+              // borderColor: 'red' ,
+              highlightBorderColor: 'black',
+              highlightBorderWidth: 1
+            },
+        });
+            
+        var factorMap = new Datamap({
+            scope: 'world',
+            element: document.getElementById('container2'),
+            projection: 'mercator',
+            height: 500,
+            //dataUrl: 'data2.csv',
+            //dataType: 'csv',
+            data: {},
+            fills: {
+              defaultFill: '#D3D3D3'
+            },
+            geographyConfig: {
+              popupTemplate: function(geo, data) {
+                   //var position = d3.mouse(self.options.element);
+                   //console.log("Position is: " + position);
+                    return "<div class='hoverinfo' style='margin-left: 600px; margin-top:90px;'><strong>" + geo.properties.name + "</strong></div>";
+             },
+              highlightBorderColor: 'black',
+              highlightBorderWidth: 1,
+            }
+        });
+      
+      
+        //Mouse click event
+        d3.selectAll('#container1').on('click', function(info) {
+            current_country = d3.select(d3.event.target).data()[0].id;
+            // call arc function
+            drawArcs(current_country);  //d3.select(d3.event.target).data()[0].id);
+        });
+      
+        //Mouse click event, right map
+        d3.selectAll('#container2').on('click', function(info) {
+            current_country = d3.select(d3.event.target).data()[0].id;
+            
+            //show popup with graph
+            loadPopup(current_country);
+        });
+      
+        function loadPopup(country)
+        {
+             modal.style.display = "block";
+             
+             //remove old svg
+             d3.select("#popupChart").select("svg").remove();
+            
+             //re-add the svg (clear)
+             popupCanvas = d3.select("#popupChart")
+             .append("svg:svg")
+             .attr("width", canvasWidth)
+             .attr("height", canvasHeight);
+            
+             loadPopUpChart();
+        }
+      
+        function drawArcs(country)
+        {
+          if (country != "")
+          {
+            console.log("Drawing arcs for: ", country);
+            stockMap.arc(im_arcs[year][country]); // immigrant arcs on stock map
+            factorMap.arc(em_arcs[year][country]); // emigrant arcs on factor map
+           }
+        }
+
+        // Set year function
+        d3.selectAll("input").on("change", function change() {
+                        year = this.value;
+                        console.log(year);
+                        updateMaps();
+        });
+             
+        function clearArcs()
+        {
+            current_country = "";
+            //clear arcs
+            stockMap.arc([]);
+            factorMap.arc([]);
+        }
+      
+        function updateMaps()
+        {
+            console.log("UpdateMaps");
+            console.log(current_country);
+            
+            // Update arcs for current country
+            drawArcs(current_country); 
+
+            // Update fill colors
+            updateFillColors(current_factor);
+            
+            //document.getElementById('testValue').innerHTML = "Showing year:" + year;
+        }
+      
+        function updateFillColors(factorValue)
+        {
+            stockMap.updateChoropleth(stock_fills[year]);
+            factorMap.updateChoropleth(fillsDict[factorValue][year]);
+        }
+      
+        function loadFactorToMap(factorValue)
+        {
+            current_factor = factorValue;
+            updateFillColors(current_factor)
+        }
+      
+        //var testPopup = {
+        //    {x: "Immigrants", y: 100}
+        //    {x: "GDI", y: 200}
+        //};
+
+        var canvasWidth = 900;
+        var canvasHeight = 600;
+        var margin = {
+            top: 50,
+            bottom: 50,
+            left: 75,
+            right: 75
+        };
+        //create popupCanvas, just once
+        var popupCanvas = d3.select("#popupChart")
+            .append("svg:svg")
+            .attr("width", canvasWidth)
+            .attr("height", canvasHeight);
+
+        // set invariant  axes params
+        var y = d3.scale.linear().range([canvasHeight-margin.top, margin.bottom]);
+        var x = d3.scale.ordinal().rangeRoundPoints([margin.left, canvasWidth-margin.right]);
+
+        var xAxis = d3.svg.axis().scale(x).orient("bottom");
+        var yAxisLeft = d3.svg.axis().scale(y).orient("left").ticks(10);
+        var yAxisRight = d3.svg.axis().scale(y).orient("right").ticks(10);
+
+        // circle scales
+        var rScale =  d3.scale.linear().domain([0.0, 2500000, 46000000]).range([5, 40, 75]);
+        var cScale = d3.scale.linear().domain([-1, 0, 1]).range(['green', '#D3D3D3', 'red']);
+
+
+        function loadPopUpChart() {
+                        
+            popupHeader.innerHTML = "Showing data for country: " + current_country + ", for factor: " + current_factor;
+
+            // TODO: map country code to actual name
+            x.domain(["Immigrants", current_country, "Emigrants"])
+            var datamin, datamax;
+
+            // only defined for GDP and Life expectancy
+            var plotfactor;
+            if (current_factor == 'Life'){
+                plotfactor = 'Life'; 
+                datamin = 50; datamax = 70;
+                popupHeader.innerHTML = "Showing "+current_country+"'s arcs plotted against Life Expectancy.\n" +
+                    "Circle radius is proportional to total migrants, and its color denotes immigrant/emigrant ratio.";
+            } else {
+                plotfactor = 'GDP'; 
+                datamin = 1000; datamax = 5000;
+                popupHeader.innerHTML = "Showing "+current_country+"'s arcs plotted against GDP per capita.\n" +
+                    "Circle radius is proportional to total migrants, and its color denotes immigrant/emigrant ratio.";
+            }
+
+            var plotdata = datasets[plotfactor][year];
+            var circle_y = plotdata[current_country];
+
+            var im_lines = [];
+            var em_lines = [];
+
+            im_arcs[year][current_country].forEach(function (arc) {
+                im_lines.push({'endpts': [{x: "Immigrants", y: plotdata[arc.id]},
+                                         {x: current_country, y: circle_y}],
+                              'stroke': arc['strokeColor'],
+                              'stroke-width': arc['strokeWidth']
+                });
+                if (Number(plotdata[arc.id]) < datamin) {datamin = Number(plotdata[arc.id]) };
+                if (Number(plotdata[arc.id]) > datamax) {datamax = Number(plotdata[arc.id]) };
+            });
+            em_arcs[year][current_country].forEach(function (arc) {
+                em_lines.push({'endpts': [{x: current_country, y: circle_y},
+                                          {x: "Emigrants", y: plotdata[arc.id]}],
+                              'stroke': arc['strokeColor'],
+                              'stroke-width': arc['strokeWidth']
+                })
+                if (Number(plotdata[arc.id]) < datamin) {datamin = Number(plotdata[arc.id]) };
+                if (Number(plotdata[arc.id]) > datamax) {datamax = Number(plotdata[arc.id]) };
+            });
+            y.domain([datamin, datamax]);
+
+            // append axes
+            popupCanvas.append("g")
+                .attr("class", "x axis")
+                .attr("transform", "translate(0,"+ (canvasHeight-margin.bottom) + ")")
+                .attr("id","the_X_ax")
+                .call(xAxis);
+            popupCanvas.append("g")
+                .attr("class", "y axis")
+                .attr("transform", "translate("+margin.left+",0)")
+                .attr("id","the_Y_ax")
+                .call(yAxisLeft);
+            popupCanvas.append("g")
+                .attr("class", "y axis")
+                .attr("transform", "translate(" + (canvasWidth-margin.right) + ",0)")
+                .attr("id","the_Y_ax_2")
+                .call(yAxisRight);
+
+            // draw lines
+            var lineFunction = d3.svg.line()
+            .x( d => x(d.x) )
+            .y( d => y(d.y) );
+
+            popupCanvas.selectAll()
+                .data(im_lines)
+                .enter().append("path")
+                .attr("d", function(d) {return lineFunction(d['endpts']); })
+                .attr("stroke-width", function(d) {return Math.pow(d['stroke-width'], 1.2);})
+                .attr("id","the_IM_lines")
+                .attr("stroke","green") ;
+
+            popupCanvas.selectAll()
+                .data(em_lines)
+                .enter().append("path")
+                .attr("d", function(d) {return lineFunction(d['endpts']); })
+                .attr("stroke-width", function(d) {return Math.pow(d['stroke-width'], 1.2);})
+                .attr("id","the_EM_lines")
+                .attr("stroke","red") ;
+
+            // add central dot
+            popupCanvas.append("circle")
+                .attr("r", rScale(total_migrants[year][current_country]))
+                .attr("fill", cScale(im_fraction[year][current_country]))
+                .attr("cx", x(current_country))
+                .attr("cy", y(circle_y))
+                .attr("id","the_circle");
+        }
+     
+     </script>
+</body>
